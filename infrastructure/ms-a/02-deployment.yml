@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-a
+  labels:
+    app: ms-a
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ms-a 
+  template:
+    metadata:
+      labels:
+        app: ms-a 
+    spec:
+      serviceAccountName: build-robot
+      initContainers:
+        - name: setup-files
+          image: alpine:latest
+          command: ['sh', '-c', "echo hello from init > /init-data/hello.txt"]
+          volumeMounts:
+            - mountPath: "/init-data"
+              name: init-volume
+      containers:
+        - name: ms-a
+          image: ayari17/ms-a
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: 512Mi
+              cpu: "1"
+            requests:
+              memory: 256Mi
+              cpu: "0.2"
+          readinessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          ports:
+            - containerPort: 3000
+              name: express-port
+          env:
+            - name: MSB_HOST
+              value: "ms-b-service.ms-b-ns"
+            - name: MSB_PORT
+              value: "80"
+            - name: PLAYER_INITIAL_LIVES # Notice that the case is different here                       
+              valueFrom:
+                configMapKeyRef:
+                  name: my-config          # The ConfigMap this value comes from.
+                  key: key1  # The key to fetch.
+          volumeMounts:
+            - name: init-volume
+              readOnly: true
+              mountPath: "/init-data"
+            - name: config-test
+              mountPath: "/configuration"
+              readOnly: true
+            # - name: mounted-volume
+            #   mountPath: "/gl5"
+      volumes:
+        - name: init-volume
+          emptyDir: {}
+        - name: config-test
+          configMap:
+            name: my-config
+            items:
+            - key: key2
+              path: test-key2
+        # - name: mounted-volume
+        #   persistentVolumeClaim:
+        #     claimName: task-pv-claim
+
